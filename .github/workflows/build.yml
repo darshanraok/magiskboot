@@ -1,4 +1,4 @@
-name: Build magiskboot
+name: Build magiskboot (All Platforms)
 
 on:
   workflow_dispatch:
@@ -8,9 +8,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      ANDROID_NDK_HOME: ${{ runner.temp }}/ndk
-      PATH: ${{ runner.temp }}/ndk/toolchains/llvm/prebuilt/linux-x86_64/bin:${PATH}
 
     steps:
       - name: Checkout Magisk repo
@@ -32,13 +29,17 @@ jobs:
         run: |
           wget https://dl.google.com/android/repository/android-ndk-r26d-linux.zip
           unzip android-ndk-r26d-linux.zip -d $RUNNER_TEMP
-          mv $RUNNER_TEMP/android-ndk-r26d $ANDROID_NDK_HOME
+          mv $RUNNER_TEMP/android-ndk-r26d $HOME/ndk
+          echo "Android NDK installed at $HOME/ndk"
 
       - name: Create output directory
         run: mkdir -p out
 
       - name: Build Android binaries
         run: |
+          export ANDROID_NDK_HOME=$HOME/ndk
+          export PATH=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH
+
           INCLUDE_FLAGS="-I magisk/native/include -I magisk/native/src/boot -I magisk/common/include -I magisk/common"
           SRC_FILES="magisk/native/src/boot/*.cpp"
 
