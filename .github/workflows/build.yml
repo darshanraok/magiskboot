@@ -1,9 +1,9 @@
 name: Build magiskboot (All Platforms)
 
 on:
-  workflow_dispatch:      # Manual trigger
+  workflow_dispatch:
   schedule:
-    - cron: "0 */6 * * *" # Run every 6 hours
+    - cron: "0 */6 * * *"
 
 jobs:
   build:
@@ -38,31 +38,30 @@ jobs:
 
       - name: Build Android binaries
         run: |
-          cd magisk/native
-          make magiskboot-android-arm
-          mv magiskboot ../../out/magiskboot-arm
-          make magiskboot-android-arm64
-          mv magiskboot ../../out/magiskboot-arm64
-          make magiskboot-android-x86
-          mv magiskboot ../../out/magiskboot-x86
-          make magiskboot-android-x86_64
-          mv magiskboot ../../out/magiskboot-x86_64
+          INCLUDE_FLAGS="-I magisk/native/include -I magisk/native/src/boot -I magisk/common/include -I magisk/common"
+          SRC_FILES="magisk/native/src/boot/*.cpp"
+
+          # Android ARM
+          aarch64-linux-android21-clang++ -O2 $INCLUDE_FLAGS -o out/magiskboot-arm64 $SRC_FILES
+          armv7a-linux-androideabi21-clang++ -O2 $INCLUDE_FLAGS -o out/magiskboot-arm $SRC_FILES
+          i686-linux-android21-clang++ -O2 $INCLUDE_FLAGS -o out/magiskboot-x86 $SRC_FILES
+          x86_64-linux-android21-clang++ -O2 $INCLUDE_FLAGS -o out/magiskboot-x86_64 $SRC_FILES
 
       - name: Build Linux binaries
         run: |
-          cd magisk/native
-          make magiskboot-linux
-          mv magiskboot ../../out/magiskboot-linux
-          make magiskboot-linux32
-          mv magiskboot ../../out/magiskboot-linux32
+          INCLUDE_FLAGS="-I magisk/native/include -I magisk/native/src/boot -I magisk/common/include -I magisk/common"
+          SRC_FILES="magisk/native/src/boot/*.cpp"
+
+          g++ -O2 $INCLUDE_FLAGS -o out/magiskboot-linux $SRC_FILES
+          g++ -m32 -O2 $INCLUDE_FLAGS -o out/magiskboot-linux32 $SRC_FILES
 
       - name: Build Windows binaries
         run: |
-          cd magisk/native
-          make magiskboot-windows64
-          mv magiskboot ../../out/magiskboot-windows64.exe
-          make magiskboot-windows32
-          mv magiskboot ../../out/magiskboot-windows32.exe
+          INCLUDE_FLAGS="-I magisk/native/include -I magisk/native/src/boot -I magisk/common/include -I magisk/common"
+          SRC_FILES="magisk/native/src/boot/*.cpp"
+
+          x86_64-w64-mingw32-g++ -O2 $INCLUDE_FLAGS -o out/magiskboot-windows64.exe $SRC_FILES
+          i686-w64-mingw32-g++ -O2 $INCLUDE_FLAGS -o out/magiskboot-windows32.exe $SRC_FILES
 
       - name: Generate SHA256 checksums
         run: |
