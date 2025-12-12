@@ -60,7 +60,7 @@ jobs:
         run: |
           sudo dpkg --add-architecture i386
           sudo apt update
-          sudo apt install -y clang lld llvm gcc g++ cmake python3 unzip wget curl gh \
+          sudo apt install -y clang lld llvm gcc g++ python3 unzip wget curl gh \
                              gcc-multilib g++-multilib libc6-dev-i386 \
                              mingw-w64
 
@@ -84,6 +84,8 @@ jobs:
 
           mkdir -p out
 
+          INCLUDE_FLAGS="-I magisk/native/include -I magisk/native/src/boot"
+
           # --- Android ---
           declare -A ANDROID_ABIS=( ["arm"]="armv7a-linux-androideabi21-clang++"
                                      ["arm64"]="aarch64-linux-android21-clang++"
@@ -93,19 +95,20 @@ jobs:
           for arch in "${!ANDROID_ABIS[@]}"; do
             COMPILER=${ANDROID_ABIS[$arch]}
             echo "Building Android $arch"
-            $COMPILER -O2 -o out/magiskboot-$arch magisk/native/src/boot/*.cpp
+            $COMPILER -O2 $INCLUDE_FLAGS \
+                      -o out/magiskboot-$arch magisk/native/src/boot/*.cpp
           done
 
           # --- Linux ---
           cd magisk/native/src/boot
-          g++ -O2 -o ../../../out/magiskboot-linux *.cpp
-          g++ -m32 -O2 -o ../../../out/magiskboot-linux32 *.cpp
+          g++ -O2 $INCLUDE_FLAGS -o ../../../out/magiskboot-linux *.cpp
+          g++ -m32 -O2 $INCLUDE_FLAGS -o ../../../out/magiskboot-linux32 *.cpp
           cd ../../../
 
           # --- Windows ---
           cd magisk/native/src/boot
-          x86_64-w64-mingw32-g++ -O2 -o ../../../out/magiskboot-windows64.exe *.cpp
-          i686-w64-mingw32-g++ -O2 -o ../../../out/magiskboot-windows32.exe *.cpp
+          x86_64-w64-mingw32-g++ -O2 $INCLUDE_FLAGS -o ../../../out/magiskboot-windows64.exe *.cpp
+          i686-w64-mingw32-g++ -O2 $INCLUDE_FLAGS -o ../../../out/magiskboot-windows32.exe *.cpp
           cd ../../../
 
       - name: Generate SHA256 checksums
