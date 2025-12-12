@@ -1,4 +1,4 @@
-name: Build magiskboot
+name: Build MagiskBoot
 
 on:
   workflow_dispatch:
@@ -10,11 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch:
-          - arm64
-          - arm
-          - x86_64
-          - x86
+        arch: [arm64, arm, x86_64, x86]
 
     steps:
       - name: Checkout Magisk
@@ -24,28 +20,31 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Install dependencies
+      - name: Install build dependencies
         run: |
           sudo apt update
           sudo apt install -y python3 python3-pip git clang lld zip unzip
 
-      - name: Install Android NDK
-        uses: nttld/setup-ndk@v1
-        with:
-          ndk-version: r26d
-
-      - name: Setup rust nightly
+      - name: Install Rust nightly
         run: |
           rustup default nightly
           rustup component add rust-src --toolchain nightly
 
-      - name: Build MagiskBoot
+      - name: Install Android NDK (r26d)
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r26d
+
+      - name: Prepare Magisk NDK toolchain
         run: |
           python3 build.py ndk
-          python3 build.py binary --boot --arch ${{ matrix.arch }}
 
-      - name: Upload binaries
+      - name: Build native binaries (including magiskboot)
+        run: |
+          python3 build.py native --arch ${{ matrix.arch }}
+
+      - name: Upload magiskboot artifact
         uses: actions/upload-artifact@v4
         with:
           name: magiskboot-${{ matrix.arch }}
-          path: out/${{ matrix.arch }}/magiskboot
+          path: out/native/${{ matrix.arch }}/magiskboot
