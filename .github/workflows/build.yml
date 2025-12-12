@@ -1,140 +1,79 @@
-name: Magiskboot Universal Compiler and Release
+name: Build magiskboot (All Platforms)
 
 on:
-  # Manual trigger to start the build
   workflow_dispatch:
-    inputs:
-      magisk_branch:
-        description: 'Magisk Branch, Tag, or Commit to build from'
-        required: true
-        default: 'master'
+  schedule:
+    - cron: "0 */6 * * *"
 
 jobs:
-  build_magiskboot:
+  build:
     runs-on: ubuntu-latest
-    
     env:
-      # --- FIX: Changed to "owner/repo" format for actions/checkout ---
-      MAGISK_REPO_FULL: topjohnwu/Magisk 
-      MAGISK_BRANCH: ${{ github.event.inputs.magisk_branch }}
-      BUILD_DIR: ${{ github.workspace }}/build/bin
-      
+      ANDROID_NDK_HOME: ${{ runner.temp }}/ndk
+      PATH: ${{ runner.temp }}/ndk/toolchains/llvm/prebuilt/linux-x86_64/bin:${PATH}
+
     steps:
-      - name: ⬇️ Checkout Magisk Source
+      - name: Checkout Magisk repo
         uses: actions/checkout@v4
         with:
-          # Use the corrected owner/repo format
-          repository: ${{ env.MAGISK_REPO_FULL }}
-          ref: ${{ env.MAGISK_BRANCH }}
-          submodules: 'recursive' 
+          repository: topjohnwu/Magisk
+          path: magisk
+          fetch-depth: 1
 
-      - name: 🐍 Setup Python 3.10+ and Rust
-        uses: actions/setup-python@v5
+      - name: Install dependencies
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt update
+          sudo apt install -y clang lld llvm gcc g++ python3 unzip wget curl \
+                             gcc-multilib g++-multilib libc6-dev-i386 \
+                             mingw-w64 make cmake
+
+      - name: Install Android NDK
+        run: |
+          wget https://dl.google.com/android/repository/android-ndk-r26d-linux.zip
+          unzip android-ndk-r26d-linux.zip -d $RUNNER_TEMP
+          mv $RUNNER_TEMP/android-ndk-r26d $ANDROID_NDK_HOME
+
+      - name: Create output directory
+        run: mkdir -p out
+
+      - name: Build Android binaries
+        run: |
+          INCLUDE_FLAGS="-I magisk/native/include -I magisk/native/src/boot -I magisk/common/include -I magisk/common"
+          SRC_FILES="magisk/native/src/boot/*.cpp"
+
+          # Android ARM
+          armv7a-linux-androideabi21-clang++ -O2 $INCLUDE_FLAGS -o out/magiskboot-arm $SRC_FILES
+          aarch64-linux-android21-clang++ -O2 $INCLUDE_FLAGS -o out/magiskboot-arm64 $SRC_FILES
+          i686-linux-android21-clang++ -O2 $INCLUDE_FLAGS -o out/magiskboot-x86 $SRC_FILES
+          x86_64-linux-android21-clang++ -O2 $INCLUDE_FLAGS -o out/magiskboot-x86_64 $SRC_FILES
+
+      - name: Build Linux binaries
+        run: |
+          INCLUDE_FLAGS="-I magisk/native/include -I magisk/native/src/boot -I magisk/common/include -I magisk/common"
+          SRC_FILES="magisk/native/src/boot/*.cpp"
+
+          g++ -O2 $INCLUDE_FLAGS -o out/magiskboot-linux $SRC_FILES
+          g++ -m32 -O2 $INCLUDE_FLAGS -o out/magiskboot-linux32 $SRC_FILES
+
+      - name: Build Windows binaries
+        run: |
+          INCLUDE_FLAGS="-I magisk/native/include -I magisk/native/src/boot -I magisk/common/include -I magisk/common"
+          SRC_FILES="magisk/native/src/boot/*.cpp"
+
+          x86_64-w64-mingw32-g++ -O2 $INCLUDE_FLAGS -o out/magiskboot-windows64.exe $SRC_FILES
+          i686-w64-mingw32-g++ -O2 $INCLUDE_FLAGS -o out/magiskboot-windows32.exe $SRC_FILES
+
+      - name: Generate SHA256 checksums
+        run: |
+          cd out
+          sha256sum * > magiskboot-checksums.txt
+          cat magiskboot-checksums.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          python-version: '3.10'
-          cache: 'pip'
-      - name: 🔧 Install Python Dependencies
-        run: pip install colorama
-        
-      # --- Install Build Dependencies for Linux/Windows Targets ---
-      - name: ⚙️ Install Cross-Compilation Tools and Libraries
-        run: |
-          sudo apt-get update
-          # Standard C/C++ compilation tools
-          sudo apt-get install -y cmake build-essential
-          # Multi-arch support for linux32
-          sudo apt-get install -y gcc-multilib g++-multilib 
-          # Mingw-w64 for Windows cross-compilation
-          sudo apt-get install -y mingw-w64 
-          
-          # Libraries required by magiskboot (LZMA/XZ, LZ4, Bzip2, Zlib)
-          # Note: These names are for the Linux development headers.
-          sudo apt-get install -y liblzma-dev liblz4-dev libbz2-dev zlib1g-dev
-
-          # Install Rust toolchain components (Magisk uses Rust for some components)
-          rustup default stable
-
-      - name: ⬇️ Download and Setup Android NDK
-        # The Magisk build script requires the NDK to be present
-        run: ./build.py ndk
-        
-      - name: 🏗️ Compile magiskboot for Android Targets (arm32, arm64, x86, x64)
-        # Uses the official Magisk Python script with NDK
-        run: |
-          echo "Compiling native binaries with ./build.py binary"
-          ./build.py binary
-          
-          echo "Moving Android binaries to unified build directory"
-          mkdir -p ${{ env.BUILD_DIR }}
-          # The official build places binaries in native/out/<ABI>/magiskboot
-          mv native/out/arm64/magiskboot ${{ env.BUILD_DIR }}/magiskboot-arm64
-          mv native/out/arm/magiskboot ${{ env.BUILD_DIR }}/magiskboot-arm32
-          mv native/out/x64/magiskboot ${{ env.BUILD_DIR }}/magiskboot-x64
-          mv native/out/x86/magiskboot ${{ env.BUILD_DIR }}/magiskboot-x86
-
-      - name: 🏗️ Compile magiskboot for Linux/Windows Targets
-        # This step uses the system compiler and installed libraries for non-NDK targets.
-        run: |
-          MAGISK_NATIVE_SRC=$(pwd)/native/magiskboot
-          BUILD_DIR=${{ env.BUILD_DIR }}
-          
-          # Common compiler flags for C++ and linking required libraries
-          # -Wl,-Bstatic forces static linking for safety, then -Wl,-Bdynamic for system libs
-          CXX_FLAGS="-std=c++17 -Wl,-Bstatic -llzma -llz4 -lbz2 -lz -Wl,-Bdynamic"
-          
-          echo "Building Linux Targets..."
-          # Linux 64-bit (using host GCC/G++)
-          g++ $MAGISK_NATIVE_SRC/*.c $MAGISK_NATIVE_SRC/*.cpp $CXX_FLAGS -o $BUILD_DIR/magiskboot-linux64
-          # Linux 32-bit (using multilib GCC/G++)
-          g++ -m32 $MAGISK_NATIVE_SRC/*.c $MAGISK_NATIVE_SRC/*.cpp $CXX_FLAGS -o $BUILD_DIR/magiskboot-linux32
-
-          echo "Building Windows Targets (Mingw-w64)..."
-          # Windows 64-bit
-          x86_64-w64-mingw32-g++ $MAGISK_NATIVE_SRC/*.c $MAGISK_NATIVE_SRC/*.cpp $CXX_FLAGS -o $BUILD_DIR/magiskboot-win64.exe
-          # Windows 32-bit
-          i686-w64-mingw32-g++ $MAGISK_NATIVE_SRC/*.c $MAGISK_NATIVE_SRC/*.cpp $CXX_FLAGS -o $BUILD_DIR/magiskboot-win32.exe
-          
-      - name: 📊 Calculate SHA256 Checksums
-        run: |
-          cd ${{ env.BUILD_DIR }}
-          echo "Generating SHA256 checksums..."
-          for file in *; do
-            if [ -f "$file" ]; then
-              sha256sum "$file" >> ../../SHA256SUMS.txt
-            fi
-          done
-          mv ../../SHA256SUMS.txt ${{ github.workspace }}
-      
-      - name: 📦 Archive Build Artifacts and Create Release
-        run: zip -j release-artifacts.zip ${{ env.BUILD_DIR }}/* SHA256SUMS.txt
-      
-      - name: 📝 Set Release Tag and Title
-        id: set_tag
-        run: |
-          TIMESTAMP=$(date +%Y%m%d%H%M%S)
-          SOURCE_IDENTIFIER=$(echo "${{ env.MAGISK_BRANCH }}" | cut -c1-8)
-          RELEASE_TAG="magiskboot-build-${SOURCE_IDENTIFIER}-${TIMESTAMP}"
-          RELEASE_TITLE="Magiskboot Universal Build (${{ env.MAGISK_BRANCH }})"
-          echo "release_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
-          echo "release_title=$RELEASE_TITLE" >> $GITHUB_OUTPUT
-
-      - name: 📤 Create GitHub Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ steps.set_tag.outputs.release_tag }}
-          name: ${{ steps.set_tag.outputs.release_title }}
-          body: |
-            ## Magiskboot Universal Binary Build
-            
-            This is an automated cross-compilation of the `magiskboot` utility from the Magisk source code.
-
-            **Source Branch/Tag/Commit:** `${{ env.MAGISK_BRANCH }}`
-            
-            ### Included Binaries (SHA256SUMS.txt inside zip)
-            
-            * **Android Targets:** `magiskboot-arm64`, `magiskboot-arm32`, `magiskboot-x64`, `magiskboot-x86`
-            * **Linux Targets:** `magiskboot-linux64`, `magiskboot-linux32`
-            * **Windows Targets:** `magiskboot-win64.exe`, `magiskboot-win32.exe`
-            
-            **Disclaimer:** The official Magisk repo primarily supports Android via NDK. Linux/Windows binaries are compiled via best-effort cross-compilation and are not officially supported by Magisk upstream.
-          files: release-artifacts.zip
+          tag_name: magiskboot-${{ github.run_id }}
+          files: out/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
