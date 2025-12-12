@@ -40,7 +40,14 @@ jobs:
           export ANDROID_NDK_HOME=$HOME/ndk
           export PATH=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH
 
-          INCLUDE_FLAGS="-I magisk/native/include -I magisk/native/src/boot -I magisk/common/include -I magisk/common"
+          # Correct include paths
+          INCLUDE_FLAGS="-I magisk/native/include \
+                         -I magisk/native/src/boot \
+                         -I magisk/common/include \
+                         -I magisk/common \
+                         -I magisk/common/libcutils \
+                         -I magisk/common/selinux"
+
           SRC_FILES="magisk/native/src/boot/*.cpp"
 
           # Android ARM
@@ -51,7 +58,13 @@ jobs:
 
       - name: Build Linux binaries
         run: |
-          INCLUDE_FLAGS="-I magisk/native/include -I magisk/native/src/boot -I magisk/common/include -I magisk/common"
+          INCLUDE_FLAGS="-I magisk/native/include \
+                         -I magisk/native/src/boot \
+                         -I magisk/common/include \
+                         -I magisk/common \
+                         -I magisk/common/libcutils \
+                         -I magisk/common/selinux"
+
           SRC_FILES="magisk/native/src/boot/*.cpp"
 
           g++ -O2 $INCLUDE_FLAGS -o out/magiskboot-linux $SRC_FILES
@@ -59,7 +72,13 @@ jobs:
 
       - name: Build Windows binaries
         run: |
-          INCLUDE_FLAGS="-I magisk/native/include -I magisk/native/src/boot -I magisk/common/include -I magisk/common"
+          INCLUDE_FLAGS="-I magisk/native/include \
+                         -I magisk/native/src/boot \
+                         -I magisk/common/include \
+                         -I magisk/common \
+                         -I magisk/common/libcutils \
+                         -I magisk/common/selinux"
+
           SRC_FILES="magisk/native/src/boot/*.cpp"
 
           x86_64-w64-mingw32-g++ -O2 $INCLUDE_FLAGS -o out/magiskboot-windows64.exe $SRC_FILES
