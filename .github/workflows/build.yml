@@ -14,7 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     
     env:
-      MAGISK_REPO: https://github.com/topjohnwu/Magisk.git
+      # --- FIX: Changed to "owner/repo" format for actions/checkout ---
+      MAGISK_REPO_FULL: topjohnwu/Magisk 
       MAGISK_BRANCH: ${{ github.event.inputs.magisk_branch }}
       BUILD_DIR: ${{ github.workspace }}/build/bin
       
@@ -22,9 +23,10 @@ jobs:
       - name: ⬇️ Checkout Magisk Source
         uses: actions/checkout@v4
         with:
-          repository: ${{ env.MAGISK_REPO }}
+          # Use the corrected owner/repo format
+          repository: ${{ env.MAGISK_REPO_FULL }}
           ref: ${{ env.MAGISK_BRANCH }}
-          submodules: 'recursive' # Magisk uses submodules for some dependencies
+          submodules: 'recursive' 
 
       - name: 🐍 Setup Python 3.10+ and Rust
         uses: actions/setup-python@v5
@@ -46,6 +48,7 @@ jobs:
           sudo apt-get install -y mingw-w64 
           
           # Libraries required by magiskboot (LZMA/XZ, LZ4, Bzip2, Zlib)
+          # Note: These names are for the Linux development headers.
           sudo apt-get install -y liblzma-dev liblz4-dev libbz2-dev zlib1g-dev
 
           # Install Rust toolchain components (Magisk uses Rust for some components)
@@ -71,13 +74,12 @@ jobs:
 
       - name: 🏗️ Compile magiskboot for Linux/Windows Targets
         # This step uses the system compiler and installed libraries for non-NDK targets.
-        # It links the required compression libraries found in the search results.
         run: |
           MAGISK_NATIVE_SRC=$(pwd)/native/magiskboot
           BUILD_DIR=${{ env.BUILD_DIR }}
           
           # Common compiler flags for C++ and linking required libraries
-          # We need to compile the C and Rust source files and link against compression libs
+          # -Wl,-Bstatic forces static linking for safety, then -Wl,-Bdynamic for system libs
           CXX_FLAGS="-std=c++17 -Wl,-Bstatic -llzma -llz4 -lbz2 -lz -Wl,-Bdynamic"
           
           echo "Building Linux Targets..."
@@ -98,7 +100,6 @@ jobs:
           echo "Generating SHA256 checksums..."
           for file in *; do
             if [ -f "$file" ]; then
-              # The sha256sum command is the same on the Linux runner
               sha256sum "$file" >> ../../SHA256SUMS.txt
             fi
           done
@@ -111,7 +112,6 @@ jobs:
         id: set_tag
         run: |
           TIMESTAMP=$(date +%Y%m%d%H%M%S)
-          # Use the commit SHA if the input branch is a commit, or the branch/tag name
           SOURCE_IDENTIFIER=$(echo "${{ env.MAGISK_BRANCH }}" | cut -c1-8)
           RELEASE_TAG="magiskboot-build-${SOURCE_IDENTIFIER}-${TIMESTAMP}"
           RELEASE_TITLE="Magiskboot Universal Build (${{ env.MAGISK_BRANCH }})"
