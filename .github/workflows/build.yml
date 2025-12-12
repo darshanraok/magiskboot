@@ -1,99 +1,50 @@
-name: Build MagiskBoot for All Android ABIs
+name: Build MagiskBoot
 
 on:
-  push:
-    # Trigger the workflow on pushes to the main branch
-    branches: [ main ]
-    paths:
-      # Only run if files in the 'native' directory (where magiskboot source lives) change
-      - 'native/**' 
-  pull_request:
-    branches: [ main ]
-    paths:
-      - 'native/**'
-  # Allows manual triggering from the Actions tab
   workflow_dispatch:
 
 jobs:
-  build_magiskboot:
-    # Use a matrix strategy to build for multiple architectures
+  build:
+    runs-on: ubuntu-latest
+
     strategy:
       fail-fast: false
       matrix:
-        # Define the target ABIs (Application Binary Interfaces)
-        abi: [ arm, arm64, x86, x86_64 ]
-    
-    runs-on: ubuntu-latest
-    
+        arch: [arm64, arm, x86_64, x86]
+
     steps:
-      - name: ⬇️ Checkout Repository
+      - name: Checkout Magisk
         uses: actions/checkout@v4
-        # Set to a large depth for full history, needed for some Magisk scripts
         with:
-          submodules: true 
+          repository: topjohnwu/Magisk
+          submodules: recursive
           fetch-depth: 0
 
-      - name: 🐍 Set up Python 3.x
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.x'
-
-      - name: 🦀 Install Rust Toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          # Magisk uses stable Rust
-          toolchain: stable
-          
-      - name: ⚙️ Install Build Dependencies
-        # Essential tools for Magisk's build script
+      - name: Install build dependencies
         run: |
-          sudo apt-get update
-          # Magisk often uses lz4, lzma, etc., and clang for NDK builds
-          sudo apt-get install -y lzma liblzma-dev lz4 liblz4-dev clang automake autoconf pkg-config
+          sudo apt update
+          sudo apt install -y python3 python3-pip git clang lld zip unzip
 
-      - name: 📥 Download & Setup Android NDK
-        # Magisk requires the NDK for cross-compilation
-        uses: android-actions/setup-ndk@v2
-        with:
-          # Using a relatively recent NDK version
-          ndk-version: '25.2.9519653'
-          # Exporting the path for the build script
-          ndk-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: 🛠️ Build MagiskBoot for ${{ matrix.abi }}
-        env:
-          # Set the target ABI from the matrix
-          ABI: ${{ matrix.abi }}
-          # Set the NDK path - important for the build script to find toolchains
-          NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
+      - name: Install Rust nightly
         run: |
-          # The official Magisk repository typically has a build script (like build.py) 
-          # or a simple Makefile/shell script to handle native compilation.
-          # We'll assume a shell script in 'native/magiskboot' for this example.
-          # You may need to adjust this command based on your magiskboot source structure.
-          echo "Attempting to build magiskboot for $ABI..."
-          # The actual command in the original Magisk repo is usually driven by build.py.
-          # If you're building a fork of Magisk, consult its build script logic.
-          # Here is a generic command that often works for NDK-based C/C++ projects:
-          # You might need to adjust the path to your C/C++ source code.
-          python3 build.py native/magiskboot $ABI
-          
-          # Assuming the final binary is named 'magiskboot' and placed in a specific path
-          # Adjust the path below based on where your build script places the output.
-          MAGISKBOOT_PATH="out/$ABI/magiskboot"
-          if [ -f "$MAGISKBOOT_PATH" ]; then
-            echo "Successfully built magiskboot for $ABI"
-            echo "MAGISKBOOT_PATH=$MAGISKBOOT_PATH" >> $GITHUB_ENV
-          else
-            echo "::error::magiskboot binary not found at $MAGISKBOOT_PATH"
-            exit 1
-          fi
+          rustup default nightly
+          rustup component add rust-src --toolchain nightly
 
-      - name: 📦 Upload ${{ matrix.abi }} Artifact
+      - name: Install Android NDK (r26d)
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r26d
+
+      - name: Prepare Magisk NDK toolchain
+        run: |
+          python3 build.py ndk
+
+      - name: Build native binaries (including magiskboot)
+        run: |
+          python3 build.py native
+
+      - name: Upload magiskboot artifact
         uses: actions/upload-artifact@v4
         with:
-          # The artifact name specifies the ABI for easy identification
-          name: magiskboot-${{ matrix.abi }}
-          # Use the environment variable set in the previous step
-          path: ${{ env.MAGISKBOOT_PATH }}
-          retention-days: 7
+          name: magiskboot-${{ matrix.arch }}
+          path: out/native/${{ matrix.arch }}/magiskboot
