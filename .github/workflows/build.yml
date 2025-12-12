@@ -33,45 +33,36 @@ jobs:
           export ANDROID_NDK_HOME=$HOME/ndk
           export PATH=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH
 
-      - name: Build magiskboot Android arm
+      - name: Create output directory
+        run: mkdir -p out
+
+      - name: Build Android binaries
         run: |
           cd magisk/native
-          ./magiskboot.sh arm
+          make magiskboot-android-arm
           mv magiskboot ../../out/magiskboot-arm
-
-      - name: Build magiskboot Android arm64
-        run: |
-          cd magisk/native
-          ./magiskboot.sh arm64
+          make magiskboot-android-arm64
           mv magiskboot ../../out/magiskboot-arm64
-
-      - name: Build magiskboot Android x86
-        run: |
-          cd magisk/native
-          ./magiskboot.sh x86
+          make magiskboot-android-x86
           mv magiskboot ../../out/magiskboot-x86
-
-      - name: Build magiskboot Android x86_64
-        run: |
-          cd magisk/native
-          ./magiskboot.sh x86_64
+          make magiskboot-android-x86_64
           mv magiskboot ../../out/magiskboot-x86_64
 
       - name: Build Linux binaries
         run: |
           cd magisk/native
           make magiskboot-linux
+          mv magiskboot ../../out/magiskboot-linux
           make magiskboot-linux32
-          mv magiskboot-linux ../../out/magiskboot-linux
-          mv magiskboot-linux32 ../../out/magiskboot-linux32
+          mv magiskboot ../../out/magiskboot-linux32
 
       - name: Build Windows binaries
         run: |
           cd magisk/native
           make magiskboot-windows64
+          mv magiskboot ../../out/magiskboot-windows64.exe
           make magiskboot-windows32
-          mv magiskboot-windows64.exe ../../out/magiskboot-windows64.exe
-          mv magiskboot-windows32.exe ../../out/magiskboot-windows32.exe
+          mv magiskboot ../../out/magiskboot-windows32.exe
 
       - name: Generate SHA256 checksums
         run: |
