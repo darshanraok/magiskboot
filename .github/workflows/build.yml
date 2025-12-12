@@ -1,99 +1,63 @@
-name: Build magiskboot (All Platforms)
+name: Magisk Build
 
 on:
-  workflow_dispatch:
-  schedule:
-    - cron: "0 */6 * * *"
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
-    steps:
-      - name: Checkout Magisk repo
-        uses: actions/checkout@v4
-        with:
-          repository: topjohnwu/Magisk
-          path: magisk
-          fetch-depth: 1
+    env:
+      ANDROID_HOME: ${{ github.workspace }}/sdk
+      PATH: ${{ github.workspace }}/sdk/cmdline-tools/latest/bin:${{ github.workspace }}/sdk/platform-tools:$PATH
 
+    steps:
+      # 1. Checkout source
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # 2. Install Python 3.8+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.10
+
+      # 3. Install basic dependencies
       - name: Install dependencies
         run: |
-          sudo dpkg --add-architecture i386
           sudo apt update
-          sudo apt install -y clang lld llvm gcc g++ python3 unzip wget curl \
-                             gcc-multilib g++-multilib libc6-dev-i386 \
-                             mingw-w64 make cmake
+          sudo apt install -y unzip wget tar clang cmake git curl zip build-essential
 
-      - name: Install Android NDK
+      # 4. Download Android SDK Command-line Tools
+      - name: Setup Android SDK
         run: |
-          wget https://dl.google.com/android/repository/android-ndk-r26d-linux.zip
-          unzip android-ndk-r26d-linux.zip -d $RUNNER_TEMP
-          mv $RUNNER_TEMP/android-ndk-r26d $HOME/ndk
-          echo "Android NDK installed at $HOME/ndk"
+          mkdir -p $ANDROID_HOME/cmdline-tools
+          wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
+          unzip cmdline-tools.zip -d $ANDROID_HOME/cmdline-tools
+          mv $ANDROID_HOME/cmdline-tools/cmdline-tools $ANDROID_HOME/cmdline-tools/latest
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-33"
 
-      - name: Create output directory
-        run: mkdir -p out
+      # 5. Set up NDK via build.py
+      - name: Setup Magisk NDK
+        run: python3 build.py ndk
 
-      - name: Build Android binaries
-        run: |
-          export ANDROID_NDK_HOME=$HOME/ndk
-          export PATH=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH
+      # 6. Build native binaries
+      - name: Build Native
+        run: python3 build.py native
 
-          # Correct include paths
-          INCLUDE_FLAGS="-I magisk/native/include \
-                         -I magisk/native/src/boot \
-                         -I magisk/common/include \
-                         -I magisk/common \
-                         -I magisk/common/libcutils \
-                         -I magisk/common/selinux"
+      # 7. Build Magisk app
+      - name: Build App
+        run: python3 build.py app
 
-          SRC_FILES="magisk/native/src/boot/*.cpp"
-
-          # Android ARM
-          armv7a-linux-androideabi21-clang++ -O2 $INCLUDE_FLAGS -o out/magiskboot-arm $SRC_FILES
-          aarch64-linux-android21-clang++ -O2 $INCLUDE_FLAGS -o out/magiskboot-arm64 $SRC_FILES
-          i686-linux-android21-clang++ -O2 $INCLUDE_FLAGS -o out/magiskboot-x86 $SRC_FILES
-          x86_64-linux-android21-clang++ -O2 $INCLUDE_FLAGS -o out/magiskboot-x86_64 $SRC_FILES
-
-      - name: Build Linux binaries
-        run: |
-          INCLUDE_FLAGS="-I magisk/native/include \
-                         -I magisk/native/src/boot \
-                         -I magisk/common/include \
-                         -I magisk/common \
-                         -I magisk/common/libcutils \
-                         -I magisk/common/selinux"
-
-          SRC_FILES="magisk/native/src/boot/*.cpp"
-
-          g++ -O2 $INCLUDE_FLAGS -o out/magiskboot-linux $SRC_FILES
-          g++ -m32 -O2 $INCLUDE_FLAGS -o out/magiskboot-linux32 $SRC_FILES
-
-      - name: Build Windows binaries
-        run: |
-          INCLUDE_FLAGS="-I magisk/native/include \
-                         -I magisk/native/src/boot \
-                         -I magisk/common/include \
-                         -I magisk/common \
-                         -I magisk/common/libcutils \
-                         -I magisk/common/selinux"
-
-          SRC_FILES="magisk/native/src/boot/*.cpp"
-
-          x86_64-w64-mingw32-g++ -O2 $INCLUDE_FLAGS -o out/magiskboot-windows64.exe $SRC_FILES
-          i686-w64-mingw32-g++ -O2 $INCLUDE_FLAGS -o out/magiskboot-windows32.exe $SRC_FILES
-
-      - name: Generate SHA256 checksums
-        run: |
-          cd out
-          sha256sum * > magiskboot-checksums.txt
-          cat magiskboot-checksums.txt
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+      # 8. Upload outputs
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v3
         with:
-          tag_name: magiskboot-${{ github.run_id }}
-          files: out/*
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: magisk-build
+          path: |
+            out/*.apk
+            native/out/**/*  
