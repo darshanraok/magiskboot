@@ -1,0 +1,92 @@
+name: Build magiskboot for all platforms
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"   # every 6 hours
+  workflow_dispatch:
+  push:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout this repo
+        uses: actions/checkout@v4
+
+      - name: Clone Official Magisk
+        run: |
+          git clone https://github.com/topjohnwu/Magisk --depth=1 magisk
+
+      - name: Copy magiskboot source
+        run: |
+          mkdir -p src
+          cp -r magisk/native/src/boot ./src
+
+      - name: Install deps
+        run: |
+          sudo apt update
+          sudo apt install -y clang build-essential gcc-multilib musl-tools unzip wget curl
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Add all rust targets
+        run: |
+          rustup target add \
+            aarch64-linux-android \
+            armv7-linux-androideabi \
+            i686-linux-android \
+            x86_64-linux-android \
+            x86_64-pc-windows-gnu \
+            i686-pc-windows-gnu \
+            x86_64-unknown-linux-gnu \
+            i686-unknown-linux-gnu
+
+      - name: Install Android NDK
+        run: |
+          wget https://dl.google.com/android/repository/android-ndk-r26d-linux.zip
+          unzip android-ndk-r26d-linux.zip
+          mv android-ndk-r26d $HOME/android-ndk
+
+      - name: Configure cargo linkers
+        run: |
+          mkdir -p .cargo
+          cat <<EOF > .cargo/config.toml
+          [target.aarch64-linux-android]
+          linker = "$HOME/android-ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang"
+          [target.armv7-linux-androideabi]
+          linker = "$HOME/android-ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi21-clang"
+          [target.i686-linux-android]
+          linker = "$HOME/android-ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/i686-linux-android21-clang"
+          [target.x86_64-linux-android]
+          linker = "$HOME/android-ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android21-clang"
+          EOF
+
+      - name: Build for all targets
+        run: |
+          cd src
+          mkdir -p ../out
+          
+          for target in \
+            aarch64-linux-android \
+            armv7-linux-androideabi \
+            i686-linux-android \
+            x86_64-linux-android \
+            x86_64-pc-windows-gnu \
+            i686-pc-windows-gnu \
+            x86_64-unknown-linux-gnu \
+            i686-unknown-linux-gnu
+          do
+            echo "Building for $target"
+            cargo build --release --target $target || exit 1
+            cp target/$target/release/magiskboot ../out/magiskboot-$target || true
+          done
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "magiskboot-$(date +'%Y-%m-%d-%H%M')"
+          files: "out/*"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
