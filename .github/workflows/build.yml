@@ -1,63 +1,75 @@
-name: Magisk Build
+name: Build magiskboot for all platforms
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   build:
+    name: Build magiskboot
     runs-on: ubuntu-latest
 
-    env:
-      ANDROID_HOME: ${{ github.workspace }}/sdk
-      PATH: ${{ github.workspace }}/sdk/cmdline-tools/latest/bin:${{ github.workspace }}/sdk/platform-tools:$PATH
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          # Android
+          - aarch64-linux-android
+          - armv7-linux-androideabi
+          - x86_64-linux-android
+          - i686-linux-android
+
+          # Linux
+          - x86_64-unknown-linux-gnu
+          - aarch64-unknown-linux-gnu
+
+          # Windows
+          - x86_64-pc-windows-gnu
+          - aarch64-pc-windows-gnu
 
     steps:
-      # 1. Checkout source
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-      # 2. Install Python 3.8+
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - name: Checkout Magisk (FULL REPO + ALL SUBMODULES)
+        uses: actions/checkout@v4
         with:
-          python-version: 3.10
+          repository: topjohnwu/Magisk
+          submodules: recursive   # <-- ensures all headers & source folders exist
+          fetch-depth: 0
 
-      # 3. Install basic dependencies
-      - name: Install dependencies
+      - name: Install build dependencies
         run: |
-          sudo apt update
-          sudo apt install -y unzip wget tar clang cmake git curl zip build-essential
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential clang lld pkg-config \
+            gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf \
+            gcc-mingw-w64 g++-mingw-w64
 
-      # 4. Download Android SDK Command-line Tools
-      - name: Setup Android SDK
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install Android NDK
+        if: contains(matrix.target, 'android')
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r26d
+          local-cache: true
+
+      - name: Export NDK paths (Android targets only)
+        if: contains(matrix.target, 'android')
         run: |
-          mkdir -p $ANDROID_HOME/cmdline-tools
-          wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
-          unzip cmdline-tools.zip -d $ANDROID_HOME/cmdline-tools
-          mv $ANDROID_HOME/cmdline-tools/cmdline-tools $ANDROID_HOME/cmdline-tools/latest
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-33"
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME" >> $GITHUB_ENV
+          echo "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
 
-      # 5. Set up NDK via build.py
-      - name: Setup Magisk NDK
-        run: python3 build.py ndk
+      - name: Build magiskboot
+        run: |
+          cd native/magiskboot
 
-      # 6. Build native binaries
-      - name: Build Native
-        run: python3 build.py native
+          # Cargo automatically detects and includes any .h/.hpp/.c/.cpp files in build.rs
+          cargo build --release --target ${{ matrix.target }}
 
-      # 7. Build Magisk app
-      - name: Build App
-        run: python3 build.py app
-
-      # 8. Upload outputs
-      - name: Upload Build Artifacts
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: magisk-build
+          name: magiskboot-${{ matrix.target }}
           path: |
-            out/*.apk
-            native/out/**/*  
+            native/target/${{ matrix.target }}/release/magiskboot*
