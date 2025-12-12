@@ -1,12 +1,11 @@
-name: Build magiskboot (Latest Magisk C++)
+name: Build magiskboot (All Platforms)
 
 on:
-  workflow_dispatch:      # Run manually
+  workflow_dispatch:      # Manual trigger
   schedule:
-    - cron: "0 */6 * * *" # Check every 6 hours
+    - cron: "0 */6 * * *" # Run every 6 hours
 
 jobs:
-
   check-magisk:
     runs-on: ubuntu-latest
     outputs:
@@ -42,7 +41,6 @@ jobs:
           name: last_commit
           path: last_magisk_commit.txt
 
-
   build:
     needs: check-magisk
     if: needs.check-magisk.outputs.should_build == 'true'
@@ -62,7 +60,9 @@ jobs:
         run: |
           sudo dpkg --add-architecture i386
           sudo apt update
-          sudo apt install -y clang lld llvm gcc g++ cmake python3 unzip wget curl gh gcc-multilib g++-multilib libc6-dev-i386
+          sudo apt install -y clang lld llvm gcc g++ cmake python3 unzip wget curl gh \
+                             gcc-multilib g++-multilib libc6-dev-i386 \
+                             mingw-w64
 
       - name: Verify sha256sum
         run: sha256sum --version
@@ -84,42 +84,34 @@ jobs:
 
           mkdir -p out
 
-          # Android builds using CMake + NDK
-          for arch in arm arm64 x86 x86_64; do
-            case $arch in
-              arm) ABI="armeabi-v7a";;
-              arm64) ABI="arm64-v8a";;
-              x86) ABI="x86";;
-              x86_64) ABI="x86_64";;
-            esac
+          # --- Android ---
+          declare -A ANDROID_ABIS=( ["arm"]="armv7a-linux-androideabi21-clang++"
+                                     ["arm64"]="aarch64-linux-android21-clang++"
+                                     ["x86"]="i686-linux-android21-clang++"
+                                     ["x86_64"]="x86_64-linux-android21-clang++" )
 
-            BUILD_DIR="magisk/native/build-$arch"
-            mkdir -p $BUILD_DIR
-            cd $BUILD_DIR
-
-            cmake -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
-                  -DANDROID_ABI=$ABI -DANDROID_PLATFORM=android-21 ../src/boot
-
-            cmake --build . --target magiskboot
-
-            cp magiskboot ../../../out/magiskboot-$arch
-            cd ../../..
+          for arch in "${!ANDROID_ABIS[@]}"; do
+            COMPILER=${ANDROID_ABIS[$arch]}
+            echo "Building Android $arch"
+            $COMPILER -O2 -o out/magiskboot-$arch magisk/native/src/boot/*.cpp
           done
 
-          # Linux builds
+          # --- Linux ---
           cd magisk/native/src/boot
-
-          # Linux 64-bit
           g++ -O2 -o ../../../out/magiskboot-linux *.cpp
-
-          # Linux 32-bit
           g++ -m32 -O2 -o ../../../out/magiskboot-linux32 *.cpp
+          cd ../../../
+
+          # --- Windows ---
+          cd magisk/native/src/boot
+          x86_64-w64-mingw32-g++ -O2 -o ../../../out/magiskboot-windows64.exe *.cpp
+          i686-w64-mingw32-g++ -O2 -o ../../../out/magiskboot-windows32.exe *.cpp
           cd ../../../
 
       - name: Generate SHA256 checksums
         run: |
           cd out
-          sha256sum magiskboot-* > magiskboot-checksums.txt
+          sha256sum * > magiskboot-checksums.txt
           cat magiskboot-checksums.txt
 
       - name: Create GitHub Release
