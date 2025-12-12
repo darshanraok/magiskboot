@@ -5,7 +5,6 @@ on:
 
 jobs:
   build:
-    name: Build magiskboot
     runs-on: ubuntu-latest
 
     strategy:
@@ -27,49 +26,44 @@ jobs:
           - aarch64-pc-windows-gnu
 
     steps:
-      - name: Checkout Magisk (FULL REPO + ALL SUBMODULES)
+      - name: Checkout full Magisk repo + all submodules
         uses: actions/checkout@v4
         with:
           repository: topjohnwu/Magisk
-          submodules: recursive   # <-- ensures all headers & source folders exist
+          submodules: recursive
           fetch-depth: 0
 
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            build-essential clang lld pkg-config \
-            gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf \
-            gcc-mingw-w64 g++-mingw-w64
+          sudo apt-get install -y build-essential clang lld pkg-config \
+              gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf \
+              gcc-mingw-w64 g++-mingw-w64
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install Android NDK
+      - name: Install Android NDK (Android targets only)
         if: contains(matrix.target, 'android')
         uses: nttld/setup-ndk@v1
         with:
           ndk-version: r26d
           local-cache: true
 
-      - name: Export NDK paths (Android targets only)
+      - name: Export NDK to PATH
         if: contains(matrix.target, 'android')
         run: |
-          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME" >> $GITHUB_ENV
           echo "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
 
       - name: Build magiskboot
         run: |
-          cd native/magiskboot
-
-          # Cargo automatically detects and includes any .h/.hpp/.c/.cpp files in build.rs
+          cd native/src/boot  # <-- correct path
           cargo build --release --target ${{ matrix.target }}
 
-      - name: Upload Artifact
+      - name: Upload magiskboot binary
         uses: actions/upload-artifact@v4
         with:
           name: magiskboot-${{ matrix.target }}
-          path: |
-            native/target/${{ matrix.target }}/release/magiskboot*
+          path: native/target/${{ matrix.target }}/release/magiskboot*
