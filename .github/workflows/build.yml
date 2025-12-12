@@ -11,7 +11,7 @@ jobs:
       fail-fast: false
       matrix:
         target:
-          # Android (NDK)
+          # Android
           - aarch64-linux-android
           - armv7-linux-androideabi
           - x86_64-linux-android
@@ -21,11 +21,11 @@ jobs:
           - x86_64-unknown-linux-gnu
           - aarch64-unknown-linux-gnu
 
-          # Windows (only supported one!)
+          # Windows
           - x86_64-pc-windows-gnu
 
     steps:
-      - name: Checkout Magisk (full repo + all submodules)
+      - name: Checkout Magisk
         uses: actions/checkout@v4
         with:
           repository: topjohnwu/Magisk
@@ -45,7 +45,10 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install Android NDK (for Android targets)
+      - name: Add Rust source component
+        run: rustup component add rust-src --toolchain nightly
+
+      - name: Install Android NDK
         if: contains(matrix.target, 'android')
         uses: nttld/setup-ndk@v1
         with:
@@ -62,7 +65,7 @@ jobs:
           cd native/src/boot
           cargo build --release --target ${{ matrix.target }}
 
-      - name: Upload magiskboot binary
+      - name: Upload magiskboot
         uses: actions/upload-artifact@v4
         with:
           name: magiskboot-${{ matrix.target }}
