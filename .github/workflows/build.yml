@@ -1,7 +1,7 @@
-name: Build magiskboot (Latest Magisk with Checksums)
+name: Build magiskboot (Latest Magisk C++)
 
 on:
-  workflow_dispatch:      # Run manually once
+  workflow_dispatch:      # Run manually
   schedule:
     - cron: "0 */6 * * *" # Check every 6 hours
 
@@ -34,8 +34,7 @@ jobs:
 
       - name: Save latest commit hash
         if: steps.check.outputs.should_build == 'true'
-        run: |
-          echo "${{ steps.check.outputs.latest_commit }}" > last_magisk_commit.txt
+        run: echo "${{ steps.check.outputs.latest_commit }}" > last_magisk_commit.txt
 
       - uses: actions/upload-artifact@v4
         if: steps.check.outputs.should_build == 'true'
@@ -50,10 +49,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout builder repo
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Download last commit record
+      - name: Download last commit artifact
         uses: actions/download-artifact@v4
         with:
           name: last_commit
@@ -61,10 +60,11 @@ jobs:
 
       - name: Install build tools
         run: |
+          sudo dpkg --add-architecture i386
           sudo apt update
-          sudo apt install -y clang lld llvm gcc g++ make python3 unzip wget curl gh
+          sudo apt install -y clang lld llvm gcc g++ cmake python3 unzip wget curl gh gcc-multilib g++-multilib libc6-dev-i386
 
-      - name: Verify sha256sum exists
+      - name: Verify sha256sum
         run: sha256sum --version
 
       - name: Install Android NDK
@@ -72,32 +72,49 @@ jobs:
           wget https://dl.google.com/android/repository/android-ndk-r26d-linux.zip
           unzip android-ndk-r26d-linux.zip
           mv android-ndk-r26d $HOME/ndk
+          export ANDROID_NDK_HOME=$HOME/ndk
 
-      - name: Clone Official Magisk
+      - name: Clone Magisk
         run: git clone https://github.com/topjohnwu/Magisk --depth=1 magisk
 
-      - name: Build magiskboot for all architectures
+      - name: Build magiskboot
         run: |
           export ANDROID_NDK_HOME=$HOME/ndk
           export PATH="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
 
-          cd magisk/native/src
-          mkdir -p ../../../out
+          mkdir -p out
 
-          declare -A archs=(
-            ["arm64"]="aarch64-linux-android"
-            ["arm"]="armv7a-linux-androideabi"
-            ["x86"]="i686-linux-android"
-            ["x86_64"]="x86_64-linux-android"
-          )
+          # Android builds using CMake + NDK
+          for arch in arm arm64 x86 x86_64; do
+            case $arch in
+              arm) ABI="armeabi-v7a";;
+              arm64) ABI="arm64-v8a";;
+              x86) ABI="x86";;
+              x86_64) ABI="x86_64";;
+            esac
 
-          for arch in "${!archs[@]}"; do
-            TARGET="${archs[$arch]}"
-            echo "Building magiskboot for $arch ($TARGET)"
-            make clean || true
-            make TARGET=$TARGET || exit 1
-            cp out/magiskboot ../../../out/magiskboot-$arch
+            BUILD_DIR="magisk/native/build-$arch"
+            mkdir -p $BUILD_DIR
+            cd $BUILD_DIR
+
+            cmake -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
+                  -DANDROID_ABI=$ABI -DANDROID_PLATFORM=android-21 ../src/boot
+
+            cmake --build . --target magiskboot
+
+            cp magiskboot ../../../out/magiskboot-$arch
+            cd ../../..
           done
+
+          # Linux builds
+          cd magisk/native/src/boot
+
+          # Linux 64-bit
+          g++ -O2 -o ../../../out/magiskboot-linux *.cpp
+
+          # Linux 32-bit
+          g++ -m32 -O2 -o ../../../out/magiskboot-linux32 *.cpp
+          cd ../../../
 
       - name: Generate SHA256 checksums
         run: |
@@ -116,14 +133,11 @@ jobs:
 
       - name: Cleanup old releases (keep latest 5)
         run: |
-          echo "Cleaning up old releases..."
           TAGS=$(gh release list --limit 100 | awk '{print $1}')
           COUNT=0
           for tag in $TAGS; do
             COUNT=$((COUNT+1))
-            if [ $COUNT -le 5 ]; then
-              continue
-            fi
+            if [ $COUNT -le 5 ]; then continue; fi
             echo "Deleting old release $tag"
             gh release delete "$tag" -y
           done
