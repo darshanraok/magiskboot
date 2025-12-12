@@ -1,92 +1,131 @@
-name: Build magiskboot for all platforms
+name: Build magiskboot (Latest Magisk with Checksums)
 
 on:
+  workflow_dispatch:      # run manually once
   schedule:
-    - cron: "0 */6 * * *"   # every 6 hours
-  workflow_dispatch:
-  push:
+    - cron: "0 */6 * * *" # check every 6 hours
 
 jobs:
+
+  check-magisk:
+    runs-on: ubuntu-latest
+    outputs:
+      should_build: ${{ steps.check.outputs.should_build }}
+      latest_commit: ${{ steps.check.outputs.latest_commit }}
+
+    steps:
+      - name: Fetch latest Magisk commit
+        id: check
+        run: |
+          LATEST=$(git ls-remote https://github.com/topjohnwu/Magisk HEAD | awk '{print $1}')
+          echo "latest_commit=$LATEST" >> $GITHUB_OUTPUT
+
+          if [ -f last_magisk_commit.txt ]; then
+            OLD=$(cat last_magisk_commit.txt)
+          else
+            OLD=""
+          fi
+
+          if [ "$LATEST" = "$OLD" ]; then
+            echo "should_build=false" >> $GITHUB_OUTPUT
+          else
+            echo "should_build=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Save latest commit hash
+        if: steps.check.outputs.should_build == 'true'
+        run: |
+          echo "${{ steps.check.outputs.latest_commit }}" > last_magisk_commit.txt
+
+      - uses: actions/upload-artifact@v4
+        if: steps.check.outputs.should_build == 'true'
+        with:
+          name: last_commit
+          path: last_magisk_commit.txt
+
+
   build:
+    needs: check-magisk
+    if: needs.check-magisk.outputs.should_build == 'true'
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout this repo
+      - name: Checkout builder repo
         uses: actions/checkout@v4
 
-      - name: Clone Official Magisk
-        run: |
-          git clone https://github.com/topjohnwu/Magisk --depth=1 magisk
+      - name: Download last commit record
+        uses: actions/download-artifact@v4
+        with:
+          name: last_commit
+          path: .
 
-      - name: Copy magiskboot source
-        run: |
-          mkdir -p src
-          cp -r magisk/native/src/boot ./src
-
-      - name: Install deps
+      - name: Install build tools
         run: |
           sudo apt update
-          sudo apt install -y clang build-essential gcc-multilib musl-tools unzip wget curl
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Add all rust targets
-        run: |
-          rustup target add \
-            aarch64-linux-android \
-            armv7-linux-androideabi \
-            i686-linux-android \
-            x86_64-linux-android \
-            x86_64-pc-windows-gnu \
-            i686-pc-windows-gnu \
-            x86_64-unknown-linux-gnu \
-            i686-unknown-linux-gnu
+          sudo apt install -y clang lld llvm gcc g++ make python3 unzip wget curl sha256sum
 
       - name: Install Android NDK
         run: |
           wget https://dl.google.com/android/repository/android-ndk-r26d-linux.zip
           unzip android-ndk-r26d-linux.zip
-          mv android-ndk-r26d $HOME/android-ndk
+          mv android-ndk-r26d $HOME/ndk
 
-      - name: Configure cargo linkers
+      - name: Clone Official Magisk
         run: |
-          mkdir -p .cargo
-          cat <<EOF > .cargo/config.toml
-          [target.aarch64-linux-android]
-          linker = "$HOME/android-ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang"
-          [target.armv7-linux-androideabi]
-          linker = "$HOME/android-ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/armv7a-linux-androideabi21-clang"
-          [target.i686-linux-android]
-          linker = "$HOME/android-ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/i686-linux-android21-clang"
-          [target.x86_64-linux-android]
-          linker = "$HOME/android-ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android21-clang"
-          EOF
+          git clone https://github.com/topjohnwu/Magisk --depth=1 magisk
 
-      - name: Build for all targets
+      - name: Build magiskboot for all architectures
         run: |
-          cd src
-          mkdir -p ../out
-          
-          for target in \
-            aarch64-linux-android \
-            armv7-linux-androideabi \
-            i686-linux-android \
-            x86_64-linux-android \
-            x86_64-pc-windows-gnu \
-            i686-pc-windows-gnu \
-            x86_64-unknown-linux-gnu \
-            i686-unknown-linux-gnu
-          do
-            echo "Building for $target"
-            cargo build --release --target $target || exit 1
-            cp target/$target/release/magiskboot ../out/magiskboot-$target || true
+          export ANDROID_NDK_HOME=$HOME/ndk
+          export PATH="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
+
+          cd magisk/native/src
+
+          mkdir -p ../../../out
+
+          declare -A archs=(
+            ["arm64"]="aarch64-linux-android"
+            ["arm"]="armv7a-linux-androideabi"
+            ["x86"]="i686-linux-android"
+            ["x86_64"]="x86_64-linux-android"
+          )
+
+          for arch in "${!archs[@]}"; do
+            TARGET="${archs[$arch]}"
+            echo "Building magiskboot for $arch ($TARGET)"
+            make clean || true
+            make TARGET=$TARGET || exit 1
+            cp out/magiskboot ../../../out/magiskboot-$arch
           done
 
+      - name: Generate SHA256 checksums
+        run: |
+          cd out
+          sha256sum magiskboot-* > magiskboot-checksums.txt
+          cat magiskboot-checksums.txt
+
       - name: Create GitHub Release
+        id: create_release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "magiskboot-$(date +'%Y-%m-%d-%H%M')"
-          files: "out/*"
+          tag_name: "magiskboot-${{ needs.check-magisk.outputs.latest_commit }}"
+          files: out/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cleanup old releases (keep latest 5)
+        run: |
+          echo "Cleaning up old releases..."
+          TAGS=$(gh release list --limit 100 | awk '{print $1}')
+          COUNT=0
+          for tag in $TAGS; do
+            COUNT=$((COUNT+1))
+            if [ $COUNT -le 5 ]; then
+              continue
+            fi
+            echo "Deleting old release $tag"
+            gh release delete "$tag" -y
+          done
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
