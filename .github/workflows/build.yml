@@ -84,7 +84,8 @@ jobs:
 
           mkdir -p out
 
-          INCLUDE_FLAGS="-I magisk/native/include -I magisk/native/src/boot"
+          # Include paths
+          INCLUDE_FLAGS="-I magisk/native/include -I magisk/native/src/boot -I magisk/common/include -I magisk/common"
 
           # --- Android ---
           declare -A ANDROID_ABIS=( ["arm"]="armv7a-linux-androideabi21-clang++"
