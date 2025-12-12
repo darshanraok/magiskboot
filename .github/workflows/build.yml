@@ -1,9 +1,9 @@
 name: Build magiskboot (Latest Magisk with Checksums)
 
 on:
-  workflow_dispatch:      # run manually once
+  workflow_dispatch:      # Run manually once
   schedule:
-    - cron: "0 */6 * * *" # check every 6 hours
+    - cron: "0 */6 * * *" # Check every 6 hours
 
 jobs:
 
@@ -62,7 +62,10 @@ jobs:
       - name: Install build tools
         run: |
           sudo apt update
-          sudo apt install -y clang lld llvm gcc g++ make python3 unzip wget curl sha256sum
+          sudo apt install -y clang lld llvm gcc g++ make python3 unzip wget curl gh
+
+      - name: Verify sha256sum exists
+        run: sha256sum --version
 
       - name: Install Android NDK
         run: |
@@ -71,8 +74,7 @@ jobs:
           mv android-ndk-r26d $HOME/ndk
 
       - name: Clone Official Magisk
-        run: |
-          git clone https://github.com/topjohnwu/Magisk --depth=1 magisk
+        run: git clone https://github.com/topjohnwu/Magisk --depth=1 magisk
 
       - name: Build magiskboot for all architectures
         run: |
@@ -80,7 +82,6 @@ jobs:
           export PATH="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
 
           cd magisk/native/src
-
           mkdir -p ../../../out
 
           declare -A archs=(
@@ -128,4 +129,3 @@ jobs:
           done
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
