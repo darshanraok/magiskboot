@@ -1,4 +1,4 @@
-name: Build magiskboot (All Platforms)
+name: Build magiskboot
 
 on:
   workflow_dispatch:
