@@ -2,37 +2,41 @@ name: Build MagiskBoot
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
+    env:
+      NDK_PATH: ${{ runner.tool_cache }}/android-ndk-r25b
+      ANDROID_NDK_HOME: ${{ runner.tool_cache }}/android-ndk-r25b
+
     steps:
-      - name: Checkout repo
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Install Android NDK
-        uses: android-actions/setup-ndk@v3
-        with:
-          ndk-version: r25b
-
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
-          components: rust-src
-
-      - name: Add Rust targets
+      - name: Install Dependencies
         run: |
-          rustup target add i686-unknown-linux-gnu x86_64-unknown-linux-gnu i686-pc-windows-gnu x86_64-pc-windows-gnu
+          sudo apt update
+          sudo apt install -y python3 python3-pip curl unzip git build-essential
 
-      - name: Build magiskboot
-        run: python3 build.py
+      - name: Setup Android NDK
+        run: |
+          NDK_VERSION=r25b
+          mkdir -p $RUNNER_TOOL_CACHE/android-ndk-$NDK_VERSION
+          curl -L https://dl.google.com/android/repository/android-ndk-r25b-linux.zip -o ndk.zip
+          unzip ndk.zip -d $RUNNER_TOOL_CACHE/android-ndk-$NDK_VERSION
+          rm ndk.zip
+          echo "NDK installed at $RUNNER_TOOL_CACHE/android-ndk-$NDK_VERSION"
 
-      - name: Upload Artifacts
+      - name: Build MagiskBoot
+        run: |
+          python3 build.py
+
+      - name: Upload MagiskBoot binaries
         uses: actions/upload-artifact@v4
         with:
-          name: magiskboot-binaries
-          path: native/out/
+          name: magiskboot
+          path: native/out/**/magiskboot*
