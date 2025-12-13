@@ -13,18 +13,29 @@ jobs:
       - name: Checkout this repo
         uses: actions/checkout@v4
 
+      - name: Set up Java (required for NDK)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '11'
+
+      - name: Install Android NDK
+        uses: android-actions/setup-ndk@v4
+        with:
+          ndk-version: r25b
+
       - name: Clone Magisk repository
         run: |
           git clone --depth=1 https://github.com/topjohnwu/Magisk.git MagiskSource
 
       - name: Copy build.py to Magisk source
-        run: |
-          cp build.py MagiskSource/
+        run: cp build.py MagiskSource/
 
       - name: Build MagiskBoot
         working-directory: MagiskSource
-        run: |
-          python3 build.py
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_HOME }}
+        run: python3 build.py
 
       - name: Archive magiskboot binaries
         working-directory: MagiskSource/native/out
