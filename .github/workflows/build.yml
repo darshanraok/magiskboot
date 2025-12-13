@@ -58,18 +58,18 @@ jobs:
 
       # 6️⃣ Build ARM64 Android
       - name: Build ARM64 Android
-        working-directory: native/src/boot
-        run: cargo build --release --target aarch64-linux-android
+        working-directory: native/src
+        run: cargo build -p magiskboot --release --target aarch64-linux-android
 
       # 7️⃣ Build ARM32 Android
       - name: Build ARM32 Android
-        working-directory: native/src/boot
-        run: cargo build --release --target armv7-linux-androideabi
+        working-directory: native/src
+        run: cargo build -p magiskboot --release --target armv7-linux-androideabi
 
       # 8️⃣ Optional: Build Linux x86_64
       - name: Build Linux x86_64
-        working-directory: native/src/boot
-        run: cargo build --release
+        working-directory: native/src
+        run: cargo build -p magiskboot --release
 
       # 9️⃣ Create GitHub Release
       - name: Create GitHub Release
