@@ -51,13 +51,13 @@ jobs:
       run: |
         cd magisk-src/native/src/boot
         cargo build --release --target aarch64-linux-android
-        cp target/aarch64-linux-android/release/boot target/aarch64-linux-android/release/magiskboot
+        cp target/aarch64-linux-android/release/magiskboot target/aarch64-linux-android/release/magiskboot
 
     - name: Build magiskboot for ARM32
       run: |
         cd magisk-src/native/src/boot
         cargo build --release --target armv7-linux-androideabi
-        cp target/armv7-linux-androideabi/release/boot target/armv7-linux-androideabi/release/magiskboot
+        cp target/armv7-linux-androideabi/release/magiskboot target/armv7-linux-androideabi/release/magiskboot
 
     - name: Upload binaries to release
       uses: softprops/action-gh-release@v1
