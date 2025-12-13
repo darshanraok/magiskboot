@@ -34,7 +34,7 @@ jobs:
           override: true
 
       - name: Add Rust source for cross-compilation
-        run: rustup component add rust-src --toolchain nightly
+         run: rustup component add rust-src --toolchain nightly
 
   # 4️⃣ Download and setup Android NDK
       - name: Download Android NDK
