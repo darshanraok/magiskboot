@@ -2,49 +2,37 @@ name: Build MagiskBoot
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Set up Java (required for NDK)
-        uses: actions/setup-java@v3
+      - name: Install Android NDK
+        uses: android-actions/setup-ndk@v3
         with:
-          distribution: temurin
-          java-version: 11
+          ndk-version: r25b
 
-      - name: Download Android NDK r25b
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+          components: rust-src
+
+      - name: Add Rust targets
         run: |
-          curl -L https://dl.google.com/android/repository/android-ndk-r25b-linux.zip -o ndk.zip
-          unzip -q ndk.zip
-          echo "$PWD/android-ndk-r25b" >> $GITHUB_PATH
-          echo "ANDROID_NDK_HOME=$PWD/android-ndk-r25b" >> $GITHUB_ENV
+          rustup target add i686-unknown-linux-gnu x86_64-unknown-linux-gnu i686-pc-windows-gnu x86_64-pc-windows-gnu
 
-      - name: Clone Magisk repository
-        run: git clone --depth=1 https://github.com/topjohnwu/Magisk.git MagiskSource
-
-      - name: Copy build.py
-        run: cp build.py MagiskSource/
-
-      - name: Build MagiskBoot
-        working-directory: MagiskSource
+      - name: Build magiskboot
         run: python3 build.py
 
-      - name: Archive magiskboot binaries
-        working-directory: MagiskSource/native/out
-        run: |
-          mkdir -p artifacts
-          cp */magiskboot* artifacts/ || true
-          tar -czf magiskboot-artifacts.tar.gz artifacts
-
-      - name: Upload artifacts
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: magiskboot-binaries
-          path: MagiskSource/native/out/magiskboot-artifacts.tar.gz
+          path: native/out/
