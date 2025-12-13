@@ -49,7 +49,7 @@ jobs:
        
 
     - name: Patch Cargo.toml for CLI binary
-      working-directory: magisk-src/native/src/boot
+      working-directory: /home/runner/work/magiskboot/magiskboot/magisk-src/native/src/boot
       run: |
         echo "" >> Cargo.toml
         echo "[[bin]]" >> Cargo.toml
