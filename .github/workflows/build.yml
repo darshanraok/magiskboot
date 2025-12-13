@@ -12,7 +12,6 @@ jobs:
     runs-on: ubuntu-latest
     env:
       ANDROID_NDK_VERSION: 25.2.9519653  # Update if needed
-      ANDROID_NDK_HOME: ${{ runner.temp }}/android-ndk
 
     steps:
     - name: Checkout workflow repo
@@ -21,7 +20,7 @@ jobs:
     - name: Install Rust nightly
       uses: actions-rs/toolchain@v1
       with:
-        toolchain: nightly-2025-05-01   # Pin the Rust nightly used for Magisk v29.0
+        toolchain: nightly-2025-05-01   # Pin nightly version
         override: true
 
     - name: Add rust-src component
@@ -29,13 +28,12 @@ jobs:
 
     - name: Download Android NDK
       run: |
+        export ANDROID_NDK_HOME=$RUNNER_TEMP/android-ndk
         curl -L https://dl.google.com/android/repository/android-ndk-r${ANDROID_NDK_VERSION}-linux.zip -o ndk.zip
-        unzip ndk.zip -d ${{ runner.temp }}
-        mv ${{ runner.temp }}/android-ndk-r${ANDROID_NDK_VERSION} $ANDROID_NDK_HOME
-
-    - name: Add NDK toolchains to PATH
-      run: |
+        unzip ndk.zip -d $RUNNER_TEMP
+        mv $RUNNER_TEMP/android-ndk-r${ANDROID_NDK_VERSION} $ANDROID_NDK_HOME
         echo "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
+        echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME" >> $GITHUB_ENV
 
     - name: Add Android targets for Rust
       run: |
@@ -53,17 +51,19 @@ jobs:
       run: |
         cd magisk-src/native/src/boot
         cargo build --release --target aarch64-linux-android
+        cp target/aarch64-linux-android/release/boot target/aarch64-linux-android/release/magiskboot
 
     - name: Build magiskboot for ARM32
       run: |
         cd magisk-src/native/src/boot
         cargo build --release --target armv7-linux-androideabi
+        cp target/armv7-linux-androideabi/release/boot target/armv7-linux-androideabi/release/magiskboot
 
     - name: Upload binaries to release
       uses: softprops/action-gh-release@v1
       with:
         files: |
-          magisk-src/native/target/aarch64-linux-android/release/boot
-          magisk-src/native/target/armv7-linux-androideabi/release/boot
+          magisk-src/native/target/aarch64-linux-android/release/magiskboot
+          magisk-src/native/target/armv7-linux-androideabi/release/magiskboot
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
