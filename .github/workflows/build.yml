@@ -11,7 +11,6 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      ANDROID_NDK_VERSION: 25.2.9519653
       ANDROID_NDK_DIR: ${{ github.workspace }}/android-ndk
 
     steps:
@@ -19,7 +18,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0
+          fetch-depth: 0  # full history for dependencies
 
       # 2️⃣ Install Rust
       - name: Install Rust
@@ -28,12 +27,12 @@ jobs:
           toolchain: stable
           override: true
 
-      # 3️⃣ Download & extract Android NDK manually
+      # 3️⃣ Download & extract correct Android NDK (r25c)
       - name: Download and setup Android NDK
         run: |
-          curl -L https://dl.google.com/android/repository/android-ndk-r${ANDROID_NDK_VERSION}-linux.zip -o ndk.zip
+          curl -L https://dl.google.com/android/repository/android-ndk-r25c-linux.zip -o ndk.zip
           unzip ndk.zip
-          mv android-ndk-r${ANDROID_NDK_VERSION} $ANDROID_NDK_DIR
+          mv android-ndk-r25c $ANDROID_NDK_DIR
           echo "ANDROID_NDK=$ANDROID_NDK_DIR" >> $GITHUB_ENV
           echo "$ANDROID_NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
 
