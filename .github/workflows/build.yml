@@ -28,13 +28,13 @@ jobs:
           git submodule update --init --recursive
 
       - name: Install Rust nightly
-  uses: actions-rs/toolchain@v1
-  with:
-    toolchain: nightly
-    override: true
+         uses: actions-rs/toolchain@v1
+         with:
+          toolchain: nightly
+          override: true
 
-- name: Add Rust source for cross-compilation
-  run: rustup component add rust-src --toolchain nightly
+      - name: Add Rust source for cross-compilation
+        run: rustup component add rust-src --toolchain nightly
 
   # 4️⃣ Download and setup Android NDK
       - name: Download Android NDK
