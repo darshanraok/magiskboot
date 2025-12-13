@@ -31,7 +31,7 @@ jobs:
         export ANDROID_NDK_HOME=$RUNNER_TEMP/android-ndk
         curl -L https://dl.google.com/android/repository/android-ndk-${ANDROID_NDK_VERSION}-linux.zip -o ndk.zip
         unzip ndk.zip -d $RUNNER_TEMP
-        mv $RUNNER_TEMP/android-ndk-r${ANDROID_NDK_VERSION} $ANDROID_NDK_HOME
+        mv $RUNNER_TEMP/android-ndk-${ANDROID_NDK_VERSION} $ANDROID_NDK_HOME
         echo "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
         echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME" >> $GITHUB_ENV
 
