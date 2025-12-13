@@ -47,6 +47,21 @@ jobs:
         git checkout v29.0
         git submodule update --init --recursive
 
+    - name: Patch Cargo.toml for CLI binary
+      run: |
+        echo "" >> magisk-src/native/src/boot/Cargo.toml
+        echo "[[bin]]" >> magisk-src/native/src/boot/Cargo.toml
+        echo 'name = "magiskboot"' >> magisk-src/native/src/boot/Cargo.toml
+        echo 'path = "cli.rs"' >> magisk-src/native/src/boot/Cargo.toml
+
+    
+    
+    
+    
+    
+    
+    
+    
     - name: Build magiskboot for ARM64
       run: |
         cd magisk-src/native/src/boot
