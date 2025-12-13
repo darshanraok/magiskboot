@@ -46,7 +46,7 @@ jobs:
         cd magisk-src
         git checkout v29.0
         git submodule update --init --recursive
-        ls -R ../../magisk-src/native/src/boot
+       
 
     - name: Patch Cargo.toml for CLI binary
       working-directory: magisk-src/native/src/boot
