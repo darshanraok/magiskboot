@@ -11,7 +11,7 @@ jobs:
     name: Build magiskboot
     runs-on: ubuntu-latest
     env:
-      ANDROID_NDK_VERSION: 25.2.9519653  # Update if needed
+      ANDROID_NDK_VERSION: r25b  # Update if needed
 
     steps:
     - name: Checkout workflow repo
@@ -29,7 +29,7 @@ jobs:
     - name: Download Android NDK
       run: |
         export ANDROID_NDK_HOME=$RUNNER_TEMP/android-ndk
-        curl -L https://dl.google.com/android/repository/android-ndk-r${ANDROID_NDK_VERSION}-linux.zip -o ndk.zip
+        curl -L https://dl.google.com/android/repository/android-ndk-${ANDROID_NDK_VERSION}-linux.zip -o ndk.zip
         unzip ndk.zip -d $RUNNER_TEMP
         mv $RUNNER_TEMP/android-ndk-r${ANDROID_NDK_VERSION} $ANDROID_NDK_HOME
         echo "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
