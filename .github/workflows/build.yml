@@ -48,11 +48,12 @@ jobs:
         git submodule update --init --recursive
 
     - name: Patch Cargo.toml for CLI binary
+      working-directory: magisk-src/native/src/boot
       run: |
-        echo "" >> magisk-src/native/src/boot/Cargo.toml
-        echo "[[bin]]" >> magisk-src/native/src/boot/Cargo.toml
-        echo 'name = "magiskboot"' >> magisk-src/native/src/boot/Cargo.toml
-        echo 'path = "cli.rs"' >> magisk-src/native/src/boot/Cargo.toml
+        echo "" >> Cargo.toml
+        echo "[[bin]]" >> Cargo.toml
+        echo 'name = "magiskboot"' >> Cargo.toml
+        echo 'path = "cli.rs"' >> Cargo.toml
 
     
     
