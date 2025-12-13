@@ -27,11 +27,11 @@ jobs:
           cd magisk-src
           git submodule update --init --recursive
 
-      # 3️⃣ Install Rust
-      - name: Install Rust
+      # 3️⃣ Install Rust nightly
+      - name: Install Rust nightly
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: nightly
           override: true
 
       # 4️⃣ Download and setup Android NDK
@@ -65,18 +65,18 @@ jobs:
 
       # 7️⃣ Build ARM64 Android
       - name: Build ARM64
-        working-directory: magisk-src/native/src
-        run: cargo build -p boot --release --target aarch64-linux-android
+        working-directory: magisk-src/native/src/boot
+        run: cargo build --release --target aarch64-linux-android
 
       # 8️⃣ Build ARM32 Android
       - name: Build ARM32
-        working-directory: magisk-src/native/src
-        run: cargo build -p boot --release --target armv7-linux-androideabi
+        working-directory: magisk-src/native/src/boot
+        run: cargo build --release --target armv7-linux-androideabi
 
       # 9️⃣ Optional: Build Linux x86_64
       - name: Build Linux
-        working-directory: magisk-src/native/src
-        run: cargo build -p boot --release
+        working-directory: magisk-src/native/src/boot
+        run: cargo build  --release
 
       # 🔟 Create GitHub Release
       - name: Create Release
