@@ -1,57 +1,66 @@
 #!/usr/bin/env python3
 import os
-import platform
-import multiprocessing
+import sys
 import subprocess
+import shutil
+import multiprocessing
 from pathlib import Path
 
 cpu_count = multiprocessing.cpu_count()
-os_name = platform.system().lower()
-is_windows = os_name == "windows"
-EXE_EXT = ".exe" if is_windows else ""
+os_name = os.name
 
-# Build architectures
-build_abis = {
+# Android ABIs (NDK)
+android_abis = {
     "armeabi-v7a": "thumbv7neon-linux-androideabi",
     "arm64-v8a": "aarch64-linux-android",
     "x86": "i686-linux-android",
     "x86_64": "x86_64-linux-android",
-    "win32": "i686-pc-windows-gnu",
-    "win64": "x86_64-pc-windows-gnu",
-    "linux32": "i686-unknown-linux-gnu",
-    "linux64": "x86_64-unknown-linux-gnu",
 }
 
-def execv(cmds: list):
-    return subprocess.run(cmds, check=True)
+# Host Rust targets
+host_targets = {
+    "linux32": "i686-unknown-linux-gnu",
+    "linux64": "x86_64-unknown-linux-gnu",
+    "win32": "i686-pc-windows-gnu",
+    "win64": "x86_64-pc-windows-gnu",
+}
 
-def collect_ndk_build():
-    for arch in build_abis.keys():
-        arch_dir = Path("native/libs", arch)
-        out_dir = Path("native/out", arch)
-        out_dir.mkdir(parents=True, exist_ok=True)
-        for source in arch_dir.iterdir():
-            target = out_dir / source.name
-            source.rename(target)
+def execv(cmds, env=None):
+    print("Running:", " ".join(cmds))
+    subprocess.run(cmds, check=True, env=env)
 
-def run_ndk_build(cmds: list):
+def run_ndk_build(app_abis):
     os.chdir("native")
-    cmds.append("NDK_PROJECT_PATH=.")
-    cmds.append("NDK_APPLICATION_MK=src/Application.mk")
-    cmds.append(f"APP_ABI={' '.join(build_abis.keys())}")
-    cmds.append(f"-j{cpu_count}")
-    subprocess.run([ndk_build := "ndk-build"] + cmds, check=True)
+    cmds = ["ndk-build", f"APP_ABI={' '.join(app_abis)}", f"-j{cpu_count}"]
+    subprocess.run(cmds, check=True)
     os.chdir("..")
 
 def build_cpp_src():
-    # Only build magiskboot
-    cmds = ["B_BOOT=1", "B_CRT0=1"]
-    run_ndk_build(cmds)
-    collect_ndk_build()
+    # Only build magiskboot for Android ABIs
+    print("* Building Android magiskboot (NDK)...")
+    run_ndk_build(android_abis.keys())
 
-def build_native():
-    print("* Building: magiskboot")
-    build_cpp_src()
+def run_cargo(target):
+    env = os.environ.copy()
+    env["CARGO_BUILD_RUSTFLAGS"] = f"-Z threads={min(8, cpu_count)}"
+    return subprocess.run(["cargo", "build", "--release", "--target", target], env=env, check=True)
+
+def build_rust_src():
+    # Only build magiskboot for host platforms
+    print("* Building host magiskboot (Rust)...")
+    os.chdir("native/src")
+    for tgt in host_targets.values():
+        run_cargo(tgt)
+        # move binary to native/out/<arch>
+        bin_name = "magiskboot"
+        if "windows" in tgt:
+            bin_name += ".exe"
+        target_dir = Path("..","..","out", tgt.split('-')[0])
+        target_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy(Path("target") / tgt / "release" / bin_name, target_dir / bin_name)
+    os.chdir("../..")
 
 if __name__ == "__main__":
-    build_native()
+    build_cpp_src()
+    build_rust_src()
+    print("✅ magiskboot build finished")
