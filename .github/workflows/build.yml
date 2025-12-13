@@ -66,8 +66,8 @@ jobs:
     
     - name: Build magiskboot for ARM64
       run: |
-        cd magisk-src/native/src
-        cargo build --release --package magiskboot --target aarch64-linux-android
+        cd magisk-src/native/src/boot
+        cargo build --release --target aarch64-linux-android
         echo "Listing release folder:"
         ls -l ../../target/aarch64-linux-android/release
         BIN=$(find ../../target/aarch64-linux-android/release -maxdepth 1 -type f -executable | head -n 1)
@@ -76,8 +76,8 @@ jobs:
 
     - name: Build magiskboot for ARM32
       run: |
-        cd magisk-src/native/src
-        cargo build --release --package magiskboot --target armv7-linux-androideabi
+        cd magisk-src/native/src/boot
+        cargo build --release --target armv7-linux-androideabi
         echo "Listing release folder:"
         ls -l ../../target/armv7-linux-androideabi/release
         BIN=$(find ../../target/armv7-linux-androideabi/release -maxdepth 1 -type f -executable | head -n 1)
