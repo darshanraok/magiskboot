@@ -25,6 +25,7 @@ jobs:
         run: |
           git clone https://github.com/topjohnwu/Magisk.git magisk-src
           cd magisk-src
+          git checkout v29.0
           git submodule update --init --recursive
 
       - name: Install Rust nightly
